@@ -11,6 +11,8 @@ module Model
 
     Holds the microscopic Hamiltonian parameters of a spin system.
 
+    Base.@kwdef is perfect for convenient keyword-based construction.
+
     Fields:
     - `N::Int`: Number of spins.
     - `Bx, By, Bz::Vector{Float64}`: Local magnetic fields per site.
@@ -59,7 +61,7 @@ module Model
     """
         generate_model(N::Int; B::Tuple{Float64,Float64,Float64}=(0,0,1), 
                     J::Tuple{Float64,Float64,Float64}=(1,1,1),
-                    topology::Symbol=:chain, seed::Int=0)
+                    lattice::Symbol=:chain, seed::Int=0)
 
     Generates a `ModelParams` object with specified system size and coupling structure.
 
@@ -67,7 +69,7 @@ module Model
     - `N`: Number of spins.
     - `B`: Tuple (Bx,By,Bz) of uniform local fields.
     - `J`: Tuple (Jx,Jy,Jz) of coupling strengths.
-    - `topology`: `:chain`, `:all2all`, or `:random`.
+    - `lattice`: `:chain_nn`, `:chain_lonRange`, `:square_nn`, or ...
     - `seed`: Optional RNG seed.
 
     # Returns
@@ -76,7 +78,7 @@ module Model
     function generate_model(N::Int; 
             B::Tuple{Float64,Float64,Float64}=(0.0, 0.0, 1.0),
             J::Tuple{Float64,Float64,Float64}=(1.0, 1.0, 1.0),
-            topology::Symbol=:chain,
+            lattice::Symbol=:chain,
             seed::Int=0)
 
         seed != 0 && Random.seed!(seed)
@@ -89,28 +91,36 @@ module Model
         Jy = zeros(N, N)
         Jz = zeros(N, N)
 
-        if topology == :chain
+        if lattice == :chain_nn
             for i in 1:N-1
                 Jx[i, i+1] = J[1]
                 Jy[i, i+1] = J[2]
                 Jz[i, i+1] = J[3]
             end
-        elseif topology == :all2all
+        elseif lattice == :chain_lonRange
             for i in 1:N-1, j in i+1:N
                 Jx[i,j] = J[1]
                 Jy[i,j] = J[2]
                 Jz[i,j] = J[3]
             end
-        elseif topology == :random
-            for i in 1:N-1, j in i+1:N
-                if rand() < 0.5
-                    Jx[i,j] = J[1] * (2rand() - 1)
-                    Jy[i,j] = J[2] * (2rand() - 1)
-                    Jz[i,j] = J[3] * (2rand() - 1)
+        elseif lattice == :square_nn
+            L = Int(sqrt(N)) # assume square lattice
+            for x in 1:L, y in 1:L
+                idx = (x-1)*L + y
+                # right neighbor
+                if y < L
+                    jdx = idx + 1
+                    Jx[idx,jdx] = J[1]; Jy[idx,jdx] = J[2]; Jz[idx,jdx] = J[3]
+                end
+                # down neighbor
+                if x < L
+                    jdx = idx + L
+                    Jx[idx,jdx] = J[1]; Jy[idx,jdx] = J[2]; Jz[idx,jdx] = J[3]
                 end
             end
+
         else
-            error("Unknown topology: $topology")
+            error("Unknown lattice: $lattice")
         end
 
         Jdict = build_Jdict(Jx, Jy, Jz)

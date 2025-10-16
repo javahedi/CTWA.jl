@@ -1,7 +1,7 @@
 module CTWA
 
     # Export main functionality from submodules
-    export Model, Clustering, ClusterMapping, PhaseSpace, Dynamic
+    export Model, Clustering, ClusterMapping, PhaseSpace, Dynamics
 
     # Include submodules in dependency order
     include("Model.jl")
