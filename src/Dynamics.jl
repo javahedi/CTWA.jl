@@ -4,8 +4,10 @@ module Dynamics
     using LinearAlgebra
     using SparseArrays
     using OrdinaryDiffEq 
-    export compute_f_tensor, f_tensor_mul
-    export compute_cluster_dHdx, cluster_eom!, evolve_cluster
+    using DifferentialEquations
+
+    export compute_f_tensor, f_tensor_mul, compute_cluster_dHdx
+    export cluster_eom!, evolve_cluster, evolve_cluster_ensemble
 
     # ==============================================================
     #  Compute structure constants f_pqr from traceless Pauli basis
@@ -153,5 +155,67 @@ module Dynamics
         prob = ODEProblem(cluster_eom!, u0, tspan, params)
         return solve(prob, solver; kwargs...)
     end
+
+
+
+    # function evolve_cluster_ensemble(u0s::Vector{Vector{Float64}}, 
+    #                                  Bcluster::Dict{Int,Vector{Float64}}, 
+    #                                 Jcluster::Dict{Tuple{Int,Int},SparseMatrixCSC{Float64,Int}}, 
+    #                                 cluster_sizes::Vector{Int},  
+    #                                 f_list::Vector{Tuple{Int,Int,Int,Float64}};
+    #                                 tspan=(0.0,10.0), 
+    #                                 solver=Tsit5(), 
+    #                                 saveat=nothing)
+
+    #     params = (; B=Bcluster, J=Jcluster, cluster_sizes, f_list)
+
+
+
+    #     # Create ODEProblem for each initial condition
+    #     prob = ODEProblem(cluster_eom!, u0s[1], tspan, params)
+    #     # Define problem function for ensemble
+    #     function prob_func(prob, i, repeat)
+    #         remake(prob, u0=u0s[i])
+    #     end
+
+    #     # EnsembleProblem from vector of problems
+    #     ep = EnsembleProblem(prob, prob_func=prob_func)
+    #     return solve(ep, solver,
+    #                 reltol=1e-8, abstol=1e-8,
+    #                 saveat=saveat,
+    #                 EnsembleThreads(),
+    #                 trajectories=length(u0s))
+    # end
+    function evolve_cluster_ensemble(u0s::Vector{Vector{Float64}}, 
+                                    Bcluster::Dict{Int,Vector{Float64}}, 
+                                    Jcluster::Dict{Tuple{Int,Int},SparseMatrixCSC{Float64,Int}}, 
+                                    cluster_sizes::Vector{Int},  
+                                    f_list::Vector{Tuple{Int,Int,Int,Float64}};
+                                    tspan=(0.0,10.0), 
+                                    solver=Tsit5(), 
+                                    saveat=nothing)
+
+        params = (; B=Bcluster, J=Jcluster, cluster_sizes, f_list)
+
+        # Create base ODEProblem
+        prob = ODEProblem(cluster_eom!, u0s[1], tspan, params)
+
+        # Ensemble problem function
+        prob_func(prob, i, repeat) = remake(prob, u0=u0s[i])
+
+        # EnsembleProblem
+        ep = EnsembleProblem(prob, prob_func=prob_func)
+
+        return solve(ep, solver,
+                    reltol=1e-8, abstol=1e-8,
+                    saveat=saveat,
+                    EnsembleThreads(),
+                    trajectories=length(u0s))
+
+       
+    end
+
+
+
 
 end # module

@@ -100,7 +100,8 @@ for clust_size in cluster_sizes_list
         end
 
         # Integrate cluster EOM
-        sol = evolve_cluster(u0, Bcluster, Jcluster, cluster_len, f_list, tspan=tspan, saveat=saveat)
+        sol = evolve_cluster(u0, Bcluster, Jcluster, 
+                            cluster_len, f_list, tspan=tspan, saveat=saveat)
 
         # Compute total Sx for each time step
         for ti in 1:n_points
