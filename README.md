@@ -6,7 +6,12 @@
 
 **CTWA.jl** — Cluster Truncated Wigner Approximation for spin systems in Julia.
 
-This package implements a **cluster-based Truncated Wigner Approximation (CTWA)** for simulating quantum spin dynamics, supporting arbitrary clusters, long-range interactions, and discrete phase-space sampling.
+
+This package implements a **cluster-based Truncated Wigner Approximation (CTWA)** for simulating quantum spin dynamics, supporting arbitrary clusters, long-range interactions, and discrete phase-space sampling.  
+The approach is described in:
+
+> Braemer, A., Vahedi, J., & Gärtner, M. (2024). *Cluster truncated Wigner approximation for bond-disordered Heisenberg spin models*. Phys. Rev. B, 110(5), 054204. [DOI: 10.1103/PhysRevB.110.054204](https://link.aps.org/doi/10.1103/PhysRevB.110.054204)
+
 
 ---
 
@@ -151,8 +156,10 @@ See the `examples/` folder:
 ## References
 
 * Wootters, *Ann. Phys.* **176**, 1–21 (1987) — Discrete Wigner function.
-* Schachenmayer et al., *NJP* **17**, 065009 (2015) — Truncated Wigner approximation for spins.
 * Polkovnikov, *Ann. Phys.* **325**, 1790–1852 (2010) — Phase-space methods for quantum dynamics.
+* J. Wurtz, et, al. Ann. Phys. **395**, 341 (2018) - Cluster truncated Wigner approximation in strongly interacting systems.
+
+
 
 ---
 
