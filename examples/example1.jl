@@ -1,17 +1,24 @@
 using CTWA
 using LinearAlgebra
 using Plots
+using Random
+using Statistics
+using Dates
 
 # -----------------------------
-#  System parameters
+# System parameters
 # -----------------------------
-N = 10               # Number of spins
-α = 1.5              # Long-range power-law exponent
-tspan = (0.0, 10.0)  # Time interval
-cluster_sizes_list = [2, 3, 4]  # Cluster sizes to test
+N = 36                   # Number of spins
+α = 3.0                  # Long-range power-law exponent
+
+cluster_sizes_list = [2, 3]  # Cluster sizes to test
+tspan = (0.0, 4.0)      # Time interval
+n_points = 101
+saveat = range(tspan[1], tspan[2], length=n_points)
+Ntraj = 200              # Number of phase-space trajectories
 
 # -----------------------------
-#  Construct long-range Ising Hamiltonian
+# Construct long-range Ising Hamiltonian
 # -----------------------------
 Bx = zeros(N)
 By = zeros(N)
@@ -24,18 +31,23 @@ for i in 1:N-1
     end
 end
 
-model = ModelParams(N, Bx, By, Bz, Jdict)
-
 # -----------------------------
-#  Initial state: all |+x>
+# Initial state: all |+x>
 # -----------------------------
 state_list = fill(:plusx, N)
 
 # -----------------------------
-#  Loop over cluster sizes
+# Prepare storage for observables
+# -----------------------------
+avg_mx_dict = Dict{Int, Vector{Float64}}()
+deltaSx_dict = Dict{Int, Vector{Float64}}()
+
+# -----------------------------
+# Loop over cluster sizes
 # -----------------------------
 for clust_size in cluster_sizes_list
     println("\n=== Running CTWA with cluster size = $clust_size ===")
+    start_time = now()
 
     # 1. Naive clustering
     clusters = naive_clustering(N, clust_size)
@@ -44,18 +56,12 @@ for clust_size in cluster_sizes_list
     # 2. Cluster mapping
     Bmat = hcat(Bx, By, Bz)  # N x 3 matrix
     Bcluster, Jcluster = microscopic_to_cluster(clusters, Bmat, Jdict)
-
-    # 3. Compute cluster basis sizes
     cluster_len = [length(Bcluster[ci]) for ci in 1:length(clusters)]
 
-    # 4. Construct traceless Pauli basis for cluster size
-    #    (4^n - 1 matrices of size 2^n x 2^n)
-    n = clust_size
-    dim = 4^n - 1
-    # Generate Pauli basis matrices for n spins
+    # 3. Construct traceless Pauli basis
     function pauli_matrix(p)
         σ = [Matrix{ComplexF64}(I(2)), [0 1;1 0], [0 -im; im 0], [1 0;0 -1]]
-        return σ[p+1]  # 0=I, 1=X, 2=Y, 3=Z
+        return σ[p+1]
     end
 
     function traceless_basis(n)
@@ -73,46 +79,72 @@ for clust_size in cluster_sizes_list
         return basis
     end
 
-    cluster_basis = traceless_basis(n)
+    cluster_basis = traceless_basis(clust_size)
 
-    # 5. Compute structure constants
-    println("Computing f_list for cluster size $n ...")
+    # 4. Compute structure constants
+    println("Computing f_list for cluster size $clust_size ...")
+    f_start = time()
     f_list = compute_f_tensor(cluster_basis)
+    println("f_list computed in $(round(time() - f_start, digits=3)) seconds")
 
-    # 6. Sample initial phase-space vector u0
-    u0 = Float64[]
-    for ci in 1:length(clusters)
-        append!(u0, sample_cluster(clusters[ci], state_list))
-    end
+    # 5. Initialize accumulators for ensemble averages
+    Sx_accum = zeros(n_points)
+    Sx2_accum = zeros(n_points)
 
-    # 7. Integrate cluster EOM
-    println("Evolving clusters ...")
-    sol = evolve_cluster(u0, Bcluster, Jcluster, cluster_len, f_list, tspan=tspan)
-
-    # 8. Compute <Mx(t)> = 1/N sum_i <σx_i>(t)
-    # Single-spin σx components are first 3 entries per spin in cluster vectors
-    avg_mx = Float64[]
-    times = sol.t
-    offset = 0
-    for ti in 1:length(times)
-        x_sum = 0.0
-        spin_idx = 1
-        offset = 0
-        for (ci, cl) in enumerate(clusters)
-            n_spin = length(cl)
-            # For simplicity, assume σx components are first n_spin entries
-            # This depends on how sample_cluster packs single-spin σx/y/z; here we take first component of each spin
-            for s in 1:n_spin
-                # single-spin σx is first entry of spin vector in cluster
-                x_val = sol.u[ti][offset + 3*(s-1) + 1]  # σx
-                x_sum += x_val
-            end
-            offset += cluster_len[ci]
+    println("Evolving $Ntraj trajectories ...")
+    for traj in 1:Ntraj
+        # Sample initial phase-space vector
+        u0 = Float64[]
+        for ci in eachindex(clusters)
+            append!(u0, sample_cluster(clusters[ci], state_list))
         end
-        push!(avg_mx, x_sum / N)
+
+        # Integrate cluster EOM
+        sol = evolve_cluster(u0, Bcluster, Jcluster, cluster_len, f_list, tspan=tspan, saveat=saveat)
+
+        # Compute total Sx for each time step
+        for ti in 1:n_points
+            Sx = 0.0
+            offset = 0
+            for (ci, cl) in enumerate(clusters)
+                n_spin = length(cl)
+                for s in 1:n_spin
+                    Sx += sol.u[ti][offset + 3*(s-1) + 1]  # σx
+                end
+                offset += cluster_len[ci]
+            end
+            Sx_accum[ti] += Sx
+            Sx2_accum[ti] += Sx^2
+        end
     end
 
-    # 9. Plot
-    plot(times, avg_mx, label="Cluster size $clust_size", xlabel="t", ylabel="<Mx(t)>")
+    # 6. Compute <Sx>/N and ΔSx/N^2
+    avg_mx_dict[clust_size] = Sx_accum ./ (Ntraj * N)
+    deltaSx_dict[clust_size] = (Sx2_accum ./ Ntraj .- (Sx_accum ./ Ntraj).^2) ./ (N^2)
+
+    println("Cluster size $clust_size done in $(now() - start_time)")
 end
 
+# -----------------------------
+# Plot results
+# -----------------------------
+plot(layout=(1,2), size=(1100,300))
+
+# Left: <Mx(t)>
+for clust_size in cluster_sizes_list
+    plot!(saveat, avg_mx_dict[clust_size], label="Cluster size $clust_size", subplot=1)
+end
+xlabel!(subplot=1, "t")
+ylabel!(subplot=1, "<Mx(t)>")
+title!(subplot=1, "CTWA <Mx>")
+
+# Right: ΔSx(t)/N^2
+for clust_size in cluster_sizes_list
+    plot!(saveat, deltaSx_dict[clust_size], label="Cluster size $clust_size", subplot=2)
+end
+xlabel!(subplot=2, "t")
+ylabel!(subplot=2, "ΔSx/N²")
+title!(subplot=2, "CTWA ΔSx/N²")
+
+savefig("example1_obs.png")
+println("Plot saved as example1_obs.png")

@@ -53,16 +53,16 @@ module Dynamics
 
     Compute dx/dt = f_pqr dHdx[q] x[r] using precomputed `f_list`.
     """
-    function f_tensor_mul(x::Vector{Float64}, 
-                        dHdx::Vector{Float64}, 
+    function f_tensor_mul(x::AbstractVector{Float64}, 
+                        dHdx::AbstractVector{Float64}, 
                         f_list::Vector{Tuple{Int,Int,Int,Float64}})
-                        
         dx = zeros(Float64, length(x))
         @inbounds for (p, q, r, val) in f_list
             dx[p] += val * dHdx[q] * x[r]
         end
         return dx
     end
+
 
 
     # ==============================================================
@@ -147,7 +147,7 @@ module Dynamics
                             Jcluster::Dict{Tuple{Int,Int},SparseMatrixCSC{Float64,Int}},
                             cluster_sizes::Vector{Int}, 
                             f_list::Vector{Tuple{Int,Int,Int,Float64}};
-                            tspan=(0.0, 10.0), solver=Tsit5(), kwargs...)
+                            tspan=(0.0, 4.0), solver=Tsit5(), kwargs...)
 
         params = (; B=Bcluster, J=Jcluster, cluster_sizes, f_list)
         prob = ODEProblem(cluster_eom!, u0, tspan, params)
